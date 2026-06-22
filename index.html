@@ -178,9 +178,12 @@
                 // 2. Map Columns to Google Format
                 finalConvertedData = filtered.map(row => {
                     const postalCode = row.PersonAddressPostalCode ? row.PersonAddressPostalCode.toString().replace('.0', '').padStart(6, '0') : "";
+                    const baseName = toProperCase(row.FullName || "");
+                    const toAddressAs = row.ToAddressAs ? row.ToAddressAs.trim() : "";
+                    const fullFirstName = toAddressAs ? `${baseName} (${toProperCase(toAddressAs)})` : baseName;
                     return {
                         "Name Prefix": row.Salutation || "",
-                        "First Name": toProperCase(row.FullName || ""),
+                        "First Name": fullFirstName,
                         "Address 1 - Postal Code": postalCode,
                         "Name Suffix": getSuffix(postalCode),
                         "Phone 1 - Value": row.MobilePhone ? row.MobilePhone.toString().replace('.0', '').trim() : "",
