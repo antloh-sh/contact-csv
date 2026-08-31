@@ -50,6 +50,31 @@
             <section class="mb-10">
                 <div class="flex items-center mb-4">
                     <span class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold mr-3">2</span>
+                    <h2 class="text-xl font-bold text-slate-800">Filter by Membership Status</h2>
+                </div>
+                <div class="flex flex-wrap gap-4 bg-slate-50 p-6 rounded-xl border border-slate-100">
+                    <label class="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-indigo-300">
+                        <input type="checkbox" class="statusFilter w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="Joined" checked>
+                        <span class="text-sm font-medium text-slate-700">Joined</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-indigo-300">
+                        <input type="checkbox" class="statusFilter w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="Pending" checked>
+                        <span class="text-sm font-medium text-slate-700">Pending</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-indigo-300">
+                        <input type="checkbox" class="statusFilter w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="Terminated">
+                        <span class="text-sm font-medium text-slate-700">Terminated</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-indigo-300">
+                        <input type="checkbox" class="statusFilter w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="Withdrawn">
+                        <span class="text-sm font-medium text-slate-700">Withdrawn</span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="mb-10">
+                <div class="flex items-center mb-4">
+                    <span class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold mr-3">3</span>
                     <h2 class="text-xl font-bold text-slate-800">Upload Source File</h2>
                 </div>
                 <div class="relative group">
@@ -89,6 +114,7 @@
         const actions = document.getElementById('actions');
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
+        const statusCheckboxes = document.querySelectorAll('.statusFilter');
 
         let rawParsedData = null; 
         let finalConvertedData = null;
@@ -115,6 +141,16 @@
                 if (rawParsedData) runTransformation();
             });
         });
+
+        statusCheckboxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (rawParsedData) runTransformation();
+            });
+        });
+
+        function getSelectedStatuses() {
+            return Array.from(statusCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+        }
 
         function parseModifiedDate(dateStr) {
             if (!dateStr) return null;
@@ -144,6 +180,14 @@
             try {
                 const startFilter = startDateInput.value ? new Date(startDateInput.value) : null;
                 const endFilter = endDateInput.value ? new Date(endDateInput.value) : null;
+                const selectedStatuses = getSelectedStatuses();
+
+                // VALIDITY CHECK: At least one status selected
+                if (selectedStatuses.length === 0) {
+                    showStatus('⚠️ Select at least one Membership Status.', 'bg-red-50 text-red-600 border border-red-200');
+                    actions.classList.add('hidden');
+                    return;
+                }
 
                 // VALIDITY CHECK: Logical date range
                 if (startFilter && endFilter && startFilter > endFilter) {
@@ -159,10 +203,28 @@
 
                 if (endFilter) endFilter.setHours(23, 59, 59, 999);
 
-                // 1. Filter Based on ModifiedOn
-                const filtered = rawParsedData.filter(row => {
+                // 1. Filter by selected Membership Status
+                const byStatus = rawParsedData.filter(row => {
+                    const status = (row.MembershipStatus || "").trim();
+                    return selectedStatuses.includes(status);
+                });
+
+                // 2. Filter by date range, using the date field relevant to each status
+                //    Joined -> JoinedDate, Pending -> RegistrationDate, Terminated -> TerminatedDate, Withdrawn -> WithdrawnDate
+                //    Falls back to ModifiedOn if the status-specific date is blank.
+                function getRelevantDate(row) {
+                    const status = (row.MembershipStatus || "").trim();
+                    let dateStr = "";
+                    if (status === "Joined") dateStr = row.JoinedDate;
+                    else if (status === "Pending") dateStr = row.RegistrationDate;
+                    else if (status === "Terminated") dateStr = row.TerminatedDate;
+                    else if (status === "Withdrawn") dateStr = row.WithdrawnDate;
+                    return dateStr || row.ModifiedOn;
+                }
+
+                const filtered = byStatus.filter(row => {
                     if (!startFilter && !endFilter) return true;
-                    const rowDate = parseModifiedDate(row.ModifiedOn);
+                    const rowDate = parseModifiedDate(getRelevantDate(row));
                     if (!rowDate) return false;
                     if (startFilter && rowDate < startFilter) return false;
                     if (endFilter && rowDate > endFilter) return false;
@@ -170,7 +232,7 @@
                 });
 
                 if (filtered.length === 0) {
-                    showStatus('No records found for the selected dates.', 'bg-amber-50 text-amber-700 border border-amber-200');
+                    showStatus('No records found for the selected status(es) and dates.', 'bg-amber-50 text-amber-700 border border-amber-200');
                     actions.classList.add('hidden');
                     return;
                 }
@@ -180,7 +242,11 @@
                     const postalCode = row.PersonAddressPostalCode ? row.PersonAddressPostalCode.toString().replace('.0', '').padStart(6, '0') : "";
                     const baseName = toProperCase(row.FullName || "");
                     const toAddressAs = row.ToAddressAs ? row.ToAddressAs.trim() : "";
-                    const fullFirstName = toAddressAs ? `${baseName} (${toProperCase(toAddressAs)})` : baseName;
+                    let fullFirstName = toAddressAs ? `${baseName} (${toProperCase(toAddressAs)})` : baseName;
+                    const status = (row.MembershipStatus || "").trim();
+                    if (status && status !== "Joined") {
+                        fullFirstName += ` [${status}]`;
+                    }
                     return {
                         "Name Prefix": row.Salutation || "",
                         "First Name": fullFirstName,
