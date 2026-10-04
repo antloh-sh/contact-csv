@@ -152,11 +152,25 @@
             return Array.from(statusCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
         }
 
+        const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+        // Parses "03-Oct-2026" or "03-Oct-2026 12:28 PM" into a LOCAL date at midnight (time ignored).
+        // Avoids new Date(string), which is browser-dependent for this format.
         function parseModifiedDate(dateStr) {
             if (!dateStr) return null;
-            // Clean common artifacts (newlines, trailing spaces)
-            const dateObj = new Date(dateStr.trim());
-            return isNaN(dateObj.getTime()) ? null : dateObj;
+            const m = dateStr.trim().match(/^(\d{1,2})-([A-Za-z]{3})[A-Za-z]*-(\d{4})/);
+            if (!m) return null;
+            const mon = MONTHS[m[2].toLowerCase()];
+            if (mon === undefined) return null;
+            return new Date(+m[3], mon, +m[1]);
+        }
+
+        // Parses the <input type="date"> value (YYYY-MM-DD) as a LOCAL date.
+        // new Date("YYYY-MM-DD") is UTC midnight, which is 8am in Singapore and wrongly excludes the start day.
+        function parseInputDate(v) {
+            if (!v) return null;
+            const [y, mo, d] = v.split('-').map(Number);
+            return new Date(y, mo - 1, d);
         }
 
         function toProperCase(str) {
@@ -178,8 +192,8 @@
             if (!rawParsedData) return;
 
             try {
-                const startFilter = startDateInput.value ? new Date(startDateInput.value) : null;
-                const endFilter = endDateInput.value ? new Date(endDateInput.value) : null;
+                const startFilter = parseInputDate(startDateInput.value);
+                const endFilter = parseInputDate(endDateInput.value);
                 const selectedStatuses = getSelectedStatuses();
 
                 // VALIDITY CHECK: At least one status selected
@@ -201,30 +215,16 @@
                     endDateInput.classList.remove('border-red-400');
                 }
 
-                if (endFilter) endFilter.setHours(23, 59, 59, 999);
-
                 // 1. Filter by selected Membership Status
                 const byStatus = rawParsedData.filter(row => {
                     const status = (row.MembershipStatus || "").trim();
                     return selectedStatuses.includes(status);
                 });
 
-                // 2. Filter by date range, using the date field relevant to each status
-                //    Joined -> JoinedDate, Pending -> RegistrationDate, Terminated -> TerminatedDate, Withdrawn -> WithdrawnDate
-                //    Falls back to ModifiedOn if the status-specific date is blank.
-                function getRelevantDate(row) {
-                    const status = (row.MembershipStatus || "").trim();
-                    let dateStr = "";
-                    if (status === "Joined") dateStr = row.JoinedDate;
-                    else if (status === "Pending") dateStr = row.RegistrationDate;
-                    else if (status === "Terminated") dateStr = row.TerminatedDate;
-                    else if (status === "Withdrawn") dateStr = row.WithdrawnDate;
-                    return dateStr || row.ModifiedOn;
-                }
-
+                // 2. Filter by ModifiedOn (date only, inclusive of both start and end days)
                 const filtered = byStatus.filter(row => {
                     if (!startFilter && !endFilter) return true;
-                    const rowDate = parseModifiedDate(getRelevantDate(row));
+                    const rowDate = parseModifiedDate(row.ModifiedOn);
                     if (!rowDate) return false;
                     if (startFilter && rowDate < startFilter) return false;
                     if (endFilter && rowDate > endFilter) return false;

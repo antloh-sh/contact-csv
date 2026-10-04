@@ -6,7 +6,7 @@ A single-page, browser-only tool that converts AAC's `DataListing-AACMembership.
 
 - **Filter by Modified Date** — restrict the export to records within a date range.
 - **Filter by Membership Status** — choose any combination of `Joined`, `Pending`, `Terminated`, `Withdrawn` (Joined and Pending are selected by default).
-- **Status-aware date filtering** — the date range is checked against the date field relevant to each status (`JoinedDate`, `RegistrationDate`, `TerminatedDate`, `WithdrawnDate`), falling back to `ModifiedOn` if that field is blank.
+- **Date filtering on `ModifiedOn`** — the range is inclusive of both the start and end day (time of day is ignored). Records with a blank or unparseable `ModifiedOn` are excluded when a date range is set.
 - **Status tagging** — non-`Joined` contacts get a `[Status]` suffix on their name (e.g. `John Tan [Terminated]`) so they're easy to spot after import.
 - **Postal code routing** — assigns a centre suffix (`@SN`, `@JS`, `@MG`, `@PL`, or `@OB`) based on postal code ranges.
 - **Client-side only** — the CSV is processed entirely in-browser; nothing is uploaded to a server.
